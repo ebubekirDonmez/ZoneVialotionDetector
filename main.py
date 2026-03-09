@@ -23,11 +23,11 @@ from typing import Optional
 
 import cv2
 import numpy as np
-import torch
 import yaml
-from ultralytics import YOLO
 
 # Kendi modüllerimiz
+from modules.detector import select_device, load_yolo_model, predict_people
+from modules.tracker import create_deepsort_tracker, yolo_results_to_deepsort_detections
 from modules.roi_checker import ROIChecker
 from modules.violation_engine import ViolationEngine
 from modules.notifier import TelegramNotifier
@@ -93,46 +93,35 @@ class ZoneViolationDetector:
         # 1) YOLO Detector
         print("\n1️⃣ YOLO Detector başlatılıyor...")
         yolo_config = self.config['yolo']
-        
-        # Device seçimi (GPU/CPU)
-        device = yolo_config.get('device', 'cuda')
-        if device == 'cuda' and not torch.cuda.is_available():
-            print("   ⚠️  CUDA bulunamadı, CPU kullanılacak")
-            device = 'cpu'
-        
-        self.device = device
-        
-        # YOLO modelini yükle
+
+        prefer_cuda = yolo_config.get('device', 'cuda') == 'cuda'
+        self.device = select_device(prefer_cuda=prefer_cuda)
+
         model_path = yolo_config.get('model', 'yolov8n.pt')
-        self.yolo_model = YOLO(model_path)
-        self.yolo_model.to(device)
-        
-        print(f"   ✅ YOLO hazır ({model_path} on {device.upper()})")
-        
-        # YOLO parametreleri
-        self.yolo_conf = yolo_config.get('confidence', 0.5)
-        self.yolo_iou = yolo_config.get('iou_threshold', 0.45)
+        self.yolo_model = load_yolo_model(model_path, device=self.device, fuse=True)
+
+        self.yolo_conf  = yolo_config.get('confidence', 0.5)
+        self.yolo_iou   = yolo_config.get('iou_threshold', 0.45)
         self.yolo_imgsz = yolo_config.get('imgsz', 640)
-        
+
+        print(f"   ✅ YOLO hazır ({model_path} on {self.device.upper()})")
+
         # 2) DeepSORT Tracker
         print("\n2️⃣ DeepSORT Tracker başlatılıyor...")
-        from deep_sort_realtime.deepsort_tracker import DeepSort
-        
-        ds_config = self.config['deepsort']
-        embedder_type = ds_config.get('embedder', 'mobilenet')
+        ds_config    = self.config['deepsort']
         embedder_gpu = ds_config.get('embedder_gpu', False)
-        
-        self.tracker = DeepSort(
-            max_age=ds_config.get('max_age', 30),
-            n_init=ds_config.get('n_init', 3),
-            max_iou_distance=ds_config.get('max_iou_distance', 0.7),
-            embedder=embedder_type,
-            embedder_gpu=embedder_gpu,
+
+        self.tracker = create_deepsort_tracker(
+            max_age          = ds_config.get('max_age', 30),
+            n_init           = ds_config.get('n_init', 3),
+            max_iou_distance = ds_config.get('max_iou_distance', 0.7),
+            embedder         = ds_config.get('embedder', 'mobilenet'),
+            embedder_gpu     = embedder_gpu,
         )
-        
+
         if not embedder_gpu:
             print(f"   ⚡ Embedder CPU modunda (GPU çakışması önleme)")
-        
+
         print(f"   ✅ DeepSORT hazır")
         
         # 3) ROI Checker
@@ -161,29 +150,6 @@ class ZoneViolationDetector:
         Path("outputs/videos").mkdir(parents=True, exist_ok=True)
         Path("logs").mkdir(parents=True, exist_ok=True)
     
-    def _yolo_to_deepsort_format(self, yolo_results):
-        """
-        YOLO çıktısını DeepSORT formatına çevir.
-        
-        YOLO: (x1, y1, x2, y2)
-        DeepSORT: ([x, y, w, h], confidence, class)
-        """
-        detections = []
-        
-        for box in yolo_results.boxes:
-            x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
-            conf = float(box.conf[0])
-            cls = int(box.cls[0])
-            
-            # (x1, y1, x2, y2) → (x, y, w, h)
-            x = float(x1)
-            y = float(y1)
-            w = float(x2 - x1)
-            h = float(y2 - y1)
-            
-            detections.append(([x, y, w, h], conf, cls))
-        
-        return detections
     
     def process_frame(self, frame: np.ndarray, frame_idx: int) -> np.ndarray:
         """
@@ -219,23 +185,22 @@ class ZoneViolationDetector:
         # ═══════════════════════════════════════
         # 1. YOLO Detection (Kişi Tespiti)
         # ═══════════════════════════════════════
-        yolo_results = self.yolo_model.predict(
-            source=frame,
+        yolo_results = predict_people(
+            self.yolo_model,
+            frame,
             conf=self.yolo_conf,
             iou=self.yolo_iou,
             imgsz=self.yolo_imgsz,
-            classes=[0],  # Sadece person
             device=self.device,
             half=(self.device == 'cuda'),
-            verbose=False,
-        )[0]
-        
+        )
+
         self.total_detections += len(yolo_results.boxes)
-        
+
         # ═══════════════════════════════════════
         # 2. DeepSORT Tracking (ID Atama)
         # ═══════════════════════════════════════
-        detections = self._yolo_to_deepsort_format(yolo_results)
+        detections = yolo_results_to_deepsort_detections(yolo_results)
         tracks = self.tracker.update_tracks(detections, frame=frame)
         
         # ═══════════════════════════════════════
