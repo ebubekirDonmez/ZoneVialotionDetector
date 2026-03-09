@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# YOLO
+*.pt
+runs/
+weights/
+
+# Output
+*.mp4
+*.avi
+output_*.jpg
+output_*.png
+violations_log.csv
+violation_snapshots/
+mot_test_outputs/
+test_video.mp4
+demo_output.mp4
+
+# Logs
+*.log
+detection.log
+
+# Dataset
+MOT17/
+MOT20/
+MOT16/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Temporary
+temp/
+tmp/
+*.tmp
+
+# Virtual environments
+venv_torch/
+
+# Sensitive config (credentials)
+config.local.yaml
+
+# Generated data
+data/
+outputs/
+logs/
+
+

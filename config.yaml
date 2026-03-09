@@ -1,0 +1,94 @@
+# Zone Violation Detection Configuration
+
+# YOLO Model Ayarları
+yolo:
+  model: "yolov8n.pt"  # yolov8n, yolov8s, yolov8m, yolov8l, yolov8x
+  confidence: 0.5
+  iou_threshold: 0.45
+  imgsz: 416  # YOLO giriş boyutu (default: 640, küçültmek hızlandırır)
+  classes: [0]  # 0 = person (sadece kişi tespiti)
+  device: "cuda"  # cuda veya cpu
+
+# DeepSORT Tracker Ayarları
+deepsort:
+  max_age: 30  # Frame sayısı - kayıp obje için ID'yi koruma süresi
+  n_init: 3    # ID ataması için gereken minimum başarılı tespit sayısı
+  max_iou_distance: 0.7
+  max_cosine_distance: 0.3
+  nn_budget: 100
+  embedder: "mobilenet"  # mobilenet (geri getirildi)
+  embedder_gpu: false  # CPU'da çalıştır (GPU'da çakışma olabilir)
+
+# ROI (Region of Interest) Ayarları
+roi:
+  zones_file: "data/roi_zones.json"  # ROI tanımlarının JSON dosyası (tools/roi_editor.py ile oluştur)
+  display_zones: true  # ROI'leri görselleştir
+  fill_alpha: 0.2  # Dolgu şeffaflığı (0-1)
+  show_labels: true  # ROI isimlerini göster
+  check_method: "bottom_center"  # bottom_center, center, any, all
+
+# İhlal Kuralları
+violation_rules:
+  enabled: true
+  min_time_in_roi: 3.0  # ROI içinde minimum kalma süresi (saniye) - spam önleme
+  
+  # Zaman tabanlı kural (belirli saatler dışında giriş yasak)
+  time_based:
+    enabled: true
+    start_time: "08:00"  # Yetkili saatlerin başlangıcı (HH:MM)
+    end_time: "16:00"    # Yetkili saatlerin bitişi (HH:MM)
+  
+  # Üniform tabanlı kural (üniforma sahip olmayanlar yasak)
+  uniform_based:
+    enabled: false  # Şimdilik false (uniform_detector.py henüz hazır değil)
+    required: true  # True: Üniform gerekli, False: Üniform olmamalı
+  
+  # Birleşik mantık: 'OR' = ikisinden biri yeterli, 'AND' = ikisi de gerekli
+  combined_logic: "OR"  # OR veya AND
+
+# Bildirim Sistemi
+notifications:
+  enabled: true
+
+  # Telegram Bot
+  # Kurulum:
+  #   1) Telegram'da @BotFather'a /newbot yaz → bot_token al
+  #   2) Botuna bir mesaj gönder, sonra tarayıcıda şunu aç:
+  #      https://api.telegram.org/bot<TOKEN>/getUpdates
+  #      "chat":{"id": ... } kısmındaki sayı senin chat_id'n
+  #   3) Aşağıya token ve chat_id'yi yaz, enabled: true yap
+  telegram:
+    enabled: false
+    bot_token: "YOUR_BOT_TOKEN_HERE"
+    chat_id: "YOUR_CHAT_ID_HERE"
+    cooldown_per_track: 60  # Aynı kişi için tekrar bildirim aralığı (saniye)
+
+# İhlal Kayıt Ayarları
+violation_logging:
+  save_snapshots: true
+  snapshot_dir: "outputs/events"
+  log_file: "logs/violations.csv"
+  save_video_clip: false  # İhlal anını video olarak kaydet (ileride)
+  
+# Video İşleme Ayarları
+video:
+  input: ""  # Video yolu
+  output: "output_video.mp4"
+  display_window: true
+  resize_scale: 0.5  # Frame küçültme oranı (0.5 = %50, 1.0 = orijinal boyut)
+  process_every_n_frames: 2  # Her N frame'de bir işle (1 = her frame, 2 = her 2 frame)
+  window_scale: 1.0  # Görüntüleme penceresi ölçeği
+  fps: 30
+
+# MOT Dataset Ayarları
+mot:
+  dataset_path: "MOT17/train"  # veya MOT20/train
+  sequences: []  # Boşsa tüm sequenceleri kullan
+  
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  console: true
+  file: "detection.log"
+
+

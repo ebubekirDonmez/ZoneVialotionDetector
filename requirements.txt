@@ -1,0 +1,32 @@
+# Zone Violation Detection - Requirements
+# Python 3.8+ önerilir
+
+# YOLO Detection
+ultralytics
+torch
+torchvision
+
+# DeepSORT Tracking
+deep-sort-realtime
+scipy
+
+# Görüntü İşleme
+opencv-python
+numpy
+Pillow
+
+# Veri İşleme ve Görselleştirme
+pandas
+matplotlib
+
+# MOT Dataset İşleme
+motmetrics
+
+# Logging ve Utility
+pyyaml
+tqdm
+
+# Bildirimler (Telegram, Discord)
+requests
+
+
